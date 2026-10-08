@@ -20,7 +20,9 @@ export async function POST(req:NextRequest){
  const input=body as Record<string,unknown>;
  const email=typeof input.email==="string"?input.email.trim().toLowerCase():"";
  const name=typeof input.name==="string"?input.name.trim():"";
- const unitIds=Array.isArray(input.unitIds)?input.unitIds:[];
+ const {data:allUnits,error:allUnitsError}=await admin.from("clinic_units").select("id");
+ if(allUnitsError||!allUnits?.length)return NextResponse.json({error:"Unidades não disponíveis."},{status:503});
+ const unitIds=allUnits.map(u=>u.id);
  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||name.length<2||name.length>120||unitIds.length===0||unitIds.length>30||!unitIds.every(x=>typeof x==="string"&&/^[a-f0-9-]{36}$/i.test(x))||new Set(unitIds).size!==unitIds.length)
  return NextResponse.json({error:"Informe nome, e-mail e pelo menos uma unidade válida."},{status:400});
  const {data:units,error:unitsError}=await admin.from("clinic_units").select("id").in("id",unitIds);
