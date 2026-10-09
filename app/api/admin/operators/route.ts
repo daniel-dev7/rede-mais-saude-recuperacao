@@ -39,6 +39,22 @@ export async function PATCH(req:NextRequest){
 }
 // Somente a conta fundadora pode excluir cadastros. O histórico de atendimentos permanece preservado.
 const FOUNDER_USER_ID="bfdcf3a9-331f-4541-a5d5-94026aef5b6c";
+export async function PUT(req:NextRequest){
+ const ctx=await authorized(req);if(ctx.error)return ctx.error;
+ if(ctx.user!.id!==FOUNDER_USER_ID)return NextResponse.json({error:"Somente o administrador fundador pode redefinir senhas."},{status:403});
+ let input:unknown;try{input=await req.json()}catch{return NextResponse.json({error:"Dados inválidos."},{status:400})}
+ const body=input&&typeof input==="object"?input as Record<string,unknown>:{};
+ const userId=body.userId,password=body.password;
+ if(typeof userId!=="string"||!/^[a-f0-9-]{36}$/i.test(userId)||userId===FOUNDER_USER_ID)return NextResponse.json({error:"Usuário inválido."},{status:400});
+ if(typeof password!=="string"||password.length<12||password.length>128)return NextResponse.json({error:"A senha provisória deve ter entre 12 e 128 caracteres."},{status:400});
+ const {data:profile,error:profileError}=await ctx.admin!.from("operator_profiles").select("active").eq("user_id",userId).maybeSingle();
+ if(profileError||!profile?.active)return NextResponse.json({error:"Usuário não encontrado ou inativo."},{status:404});
+ const {data:target,error:targetError}=await ctx.admin!.auth.admin.getUserById(userId);
+ if(targetError||!target.user)return NextResponse.json({error:"Conta de acesso não encontrada."},{status:404});
+ const {error}=await ctx.admin!.auth.admin.updateUserById(userId,{password,app_metadata:{...target.user.app_metadata,must_change_password:true}});
+ if(error)return NextResponse.json({error:"Não foi possível redefinir a senha."},{status:500});
+ return NextResponse.json({ok:true,message:"Senha provisória definida. O usuário deverá trocá-la no próximo acesso."});
+}
 export async function DELETE(req:NextRequest){
  const ctx=await authorized(req);if(ctx.error)return ctx.error;
  if(ctx.user!.id!==FOUNDER_USER_ID)return NextResponse.json({error:"Somente o administrador fundador pode excluir usuários."},{status:403});
