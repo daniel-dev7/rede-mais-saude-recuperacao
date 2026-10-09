@@ -1,6 +1,6 @@
 import {NextResponse} from "next/server";
 import {createClient} from "@supabase/supabase-js";
-import {DRCLICK_CLINICS,fetchMissedAppointments,yesterdayBelem} from "../../../../../lib/drclick";
+import {DRCLICK_CLINICS,fetchMissedAppointments,yesterdayBelem} from "../../../../lib/drclick";
 
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
