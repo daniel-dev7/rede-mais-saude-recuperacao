@@ -29,7 +29,7 @@ export async function GET(request:Request){
    for(const r of records)if(r.idagendamento&&!unique.has(r.idagendamento))unique.set(r.idagendamento,r);
    const eligible=[...unique.values()].filter(r=>{
     const digits=(r.patient_phone||"").replace(/\D/g,"");
-    return Boolean(r.patient_name?.trim()&&[10,11,12,13].includes(digits.length)&&!/^(0+)$/.test(digits)&&r.scheduled_date&&!Number.isNaN(Date.parse(r.scheduled_date)));
+    return Number(r.amount)>0&&Boolean(r.patient_name?.trim()&&[10,11,12,13].includes(digits.length)&&!/^(0+)$/.test(digits)&&r.scheduled_date&&!Number.isNaN(Date.parse(r.scheduled_date)));
    });
    const rows=eligible.map(r=>({
     external_id:r.idagendamento,unit_id:unitId,patient_name:r.patient_name!.trim(),
