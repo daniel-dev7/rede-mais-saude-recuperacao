@@ -1,25 +1,55 @@
 import "server-only";
-const BASE="https://api-maissaude.drclick.com.br";
-const CLINIC="3fe2145e-ec64-442b-a967-864afb4d4393";
-export type DrClickResult={records:unknown[];rawShape:string};
-export function yesterdayBelem(now=new Date()){const local=new Date(now.toLocaleString("en-US",{timeZone:"America/Belem"}));local.setDate(local.getDate()-1);return [local.getFullYear(),String(local.getMonth()+1).padStart(2,"0"),String(local.getDate()).padStart(2,"0")].join("-")}
-export async function fetchMissedAppointments(date:string):Promise<DrClickResult>{
- if(!/^\d{4}-\d{2}-\d{2}$/.test(date))throw new Error("Data inválida");
- const token=process.env.DRCLICK_API_TOKEN;
- const apiKey=process.env.DRCLICK_API_KEY;
- if(!token&&!apiKey)throw new Error("Credencial da DrClick não configurada");
- const url=new URL("/api/reports/appointmentbystatus",BASE);
- url.searchParams.set("idclinica",CLINIC);url.searchParams.set("status","faltou");url.searchParams.set("start_date",date);url.searchParams.set("end_date",date);
- const headers:HeadersInit={Accept:"application/json"};
- if(token)headers.Authorization="Bearer "+token;
- if(apiKey)headers["x-api-key"]=apiKey;
- const res=await fetch(url,{headers,cache:"no-store",signal:AbortSignal.timeout(20000)});
- if(!res.ok)throw new Error("DrClick retornou HTTP "+res.status);
- const payload:unknown=await res.json();
- if(Array.isArray(payload))return {records:payload,rawShape:"array"};
- if(payload&&typeof payload==="object"){
- const obj=payload as Record<string,unknown>;
- for(const key of ["data","results","appointments","items"]){if(Array.isArray(obj[key]))return {records:obj[key] as unknown[],rawShape:key}}
- }
- throw new Error("Formato de resposta ainda não reconhecido; integração exige mapeamento validado");
+
+/** Dr Click official missed-appointments API (integration guide v1.0). */
+export type DrClickAppointment={
+  idagendamento:string;
+  status:string;
+  scheduled_date:string;
+  patient_id?:string;
+  patient_name?:string;
+  patient_phone?:string|null;
+  professional_name?:string;
+  category_name?:string;
+  item_name?:string;
+  clinica?:{idclinica?:string;nome?:string};
+  amount?:number;
+  amount_paid?:number;
+};
+export type DrClickResult={records:DrClickAppointment[];rawShape:string};
+
+export function yesterdayBelem(now=new Date()){
+  const date=new Intl.DateTimeFormat("en-CA",{timeZone:"America/Belem",year:"numeric",month:"2-digit",day:"2-digit"}).format(now);
+  const previous=new Date(date+"T12:00:00Z");previous.setUTCDate(previous.getUTCDate()-1);
+  return previous.toISOString().slice(0,10);
+}
+
+export async function fetchMissedAppointments(date:string,clinicId?:string):Promise<DrClickResult>{
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(Date.parse(date+"T00:00:00Z")))throw new Error("Data inválida");
+  const clinic=clinicId||process.env.DRCLICK_CLINIC_ID;
+  if(!clinic||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clinic))throw new Error("Identificador de clínica DrClick não configurado");
+  const base=process.env.DRCLICK_API_BASE_URL;
+  if(!base||!/^https:\/\//i.test(base))throw new Error("URL base HTTPS da DrClick não configurada");
+  const token=process.env.DRCLICK_API_TOKEN;
+  const apiKey=process.env.DRCLICK_API_KEY;
+  if(!token&&!apiKey)throw new Error("Credencial da DrClick não configurada");
+  const url=new URL("/api/bots/appointmentbystatus",base);
+  url.searchParams.set("idclinica",clinic);
+  url.searchParams.set("status","faltou");
+  url.searchParams.set("start_date",date);
+  url.searchParams.set("end_date",date);
+  const headers:HeadersInit={Accept:"application/json"};
+  if(token)headers.Authorization="Bearer "+token;
+  if(apiKey)headers["x-api-key"]=apiKey;
+  const res=await fetch(url,{headers,cache:"no-store",signal:AbortSignal.timeout(20000)});
+  if(!res.ok)throw new Error("DrClick retornou HTTP "+res.status);
+  const payload:unknown=await res.json();
+  if(!payload||typeof payload!=="object"||Array.isArray(payload))throw new Error("Resposta DrClick inválida");
+  const root=payload as Record<string,unknown>;
+  if(root.success!==true)throw new Error("DrClick informou falha na consulta");
+  const data=root.data;
+  if(!data||typeof data!=="object"||Array.isArray(data))throw new Error("Envelope data ausente");
+  const records=(data as Record<string,unknown>).analytic_results_appointments;
+  if(!Array.isArray(records))throw new Error("Campo analytic_results_appointments ausente");
+  const valid=records.filter((r):r is DrClickAppointment=>Boolean(r)&&typeof r==="object"&&!Array.isArray(r)&&typeof r.idagendamento==="string"&&r.status==="faltou");
+  return {records:valid,rawShape:"data.analytic_results_appointments"};
 }
