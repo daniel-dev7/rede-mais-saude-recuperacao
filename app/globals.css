@@ -10,3 +10,25 @@
 @media(max-width:950px){.filter-bar .filter-select:has(input[type="date"]){flex:1 1 200px;justify-content:space-between}}
 @media(max-width:720px){.filter-bar .filter-select:has(input[type="date"]){flex:1 1 190px;justify-content:space-between}.filter-bar .filter-select:has(input[type="date"]) span{display:inline-block}.filter-bar .filter-select input[type="date"]{width:140px}}
 @media(max-width:470px){.filter-bar .filter-select:has(input[type="date"]){flex-basis:100%}.filter-bar .filter-select input[type="date"]{width:60%}}
+
+
+/* Rede Mais Saúde: palette inspired by the official scheduling interface */
+:root{--green:#009ca7;--border:#dcebed;--bg:#f5f9fa;--shadow:0 6px 26px rgba(0,113,122,.055)}
+.sidebar{background:#006e79}
+.brand-symbol,.login-symbol{background:#009ca7}
+.side-nav button{color:#c3e4e6}
+.side-nav button:hover{background:rgba(255,255,255,.12)}
+.side-nav button.selected{background:#008f9a;color:#fff}
+.nav-indicator{background:#8be8e8}
+.side-caption{color:#9cd4d7}
+.brand-row small,.account-copy small{color:#b1d8da}
+.security-card{color:#a2eceb}
+.security-card strong{color:#fff}
+.security-card span{color:#b1d8da}
+.avatar,.header-avatar{background:#009ca7}
+.app-header{border-bottom:3px solid #009ca7}
+.heading-row .eyebrow{color:#008e99}
+.live-dot{background:#009ca7;box-shadow:0 0 0 4px #e1f6f6}
+.filter-bar .filter-select:has(input[type="date"]):focus-within{border-color:#009ca7;box-shadow:0 0 0 3px rgba(0,156,167,.13)}
+.filter-bar .filter-select input[type="date"]:focus{border-color:#009ca7}
+button:focus-visible,input:focus-visible,select:focus-visible{outline-color:#73d9dc}
