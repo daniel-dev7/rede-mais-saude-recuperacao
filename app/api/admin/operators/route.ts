@@ -37,6 +37,26 @@ export async function PATCH(req:NextRequest){
  if(error)return NextResponse.json({error:"Não foi possível atualizar o usuário."},{status:500});
  return NextResponse.json({ok:true});
 }
+// Somente a conta fundadora pode excluir cadastros. O histórico de atendimentos permanece preservado.
+const FOUNDER_USER_ID="bfdcf3a9-331f-4541-a5d5-94026aef5b6c";
+export async function DELETE(req:NextRequest){
+ const ctx=await authorized(req);if(ctx.error)return ctx.error;
+ if(ctx.user!.id!==FOUNDER_USER_ID)return NextResponse.json({error:"Somente o administrador fundador pode excluir usuários."},{status:403});
+ let input:unknown;try{input=await req.json()}catch{return NextResponse.json({error:"Dados inválidos."},{status:400})}
+ const userId=input&&typeof input==="object"&&"userId" in input?(input as {userId?:unknown}).userId:null;
+ if(typeof userId!=="string"||!/^[a-f0-9-]{36}$/i.test(userId))return NextResponse.json({error:"Usuário inválido."},{status:400});
+ if(userId===FOUNDER_USER_ID)return NextResponse.json({error:"A conta do administrador fundador não pode ser excluída."},{status:403});
+ const {data:target,error:targetError}=await ctx.admin!.from("operator_profiles").select("user_id,role,active").eq("user_id",userId).maybeSingle();
+ if(targetError)return NextResponse.json({error:"Não foi possível validar o cadastro."},{status:500});
+ if(!target)return NextResponse.json({error:"Cadastro não encontrado."},{status:404});
+ if(target.role==="admin"&&target.active){const {data:admins,error:countError}=await ctx.admin!.from("operator_profiles").select("user_id").eq("role","admin").eq("active",true);if(countError||!admins||admins.length<=1)return NextResponse.json({error:"É obrigatório manter pelo menos um administrador ativo."},{status:400})}
+ // Soft delete mantém as referências históricas de contato e auditoria.
+ const {error:deleteError}=await ctx.admin!.auth.admin.deleteUser(userId,true);
+ if(deleteError)return NextResponse.json({error:"Não foi possível excluir a conta de acesso."},{status:500});
+ const {error:profileError}=await ctx.admin!.from("operator_profiles").delete().eq("user_id",userId);
+ if(profileError)return NextResponse.json({error:"Conta desativada, mas houve falha ao remover o perfil. Contate o suporte."},{status:500});
+ return NextResponse.json({ok:true,message:"Cadastro excluído. O histórico de atendimentos foi preservado."});
+}
 export async function POST(req:NextRequest){
  const url=process.env.NEXT_PUBLIC_SUPABASE_URL;
  const pub=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
