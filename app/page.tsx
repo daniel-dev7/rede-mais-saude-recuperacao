@@ -14,7 +14,10 @@ export default function Home(){
  const [resetCooldownUntil,setResetCooldownUntil]=useState(0),[resetSeconds,setResetSeconds]=useState(0),[resetMode,setResetMode]=useState(false),[recoveryMode,setRecoveryMode]=useState(false),[resetEmail,setResetEmail]=useState(""),[resetBusy,setResetBusy]=useState(false),[invitePassword,setInvitePassword]=useState(""),[mustChangePassword,setMustChangePassword]=useState(false),[newPassword,setNewPassword]=useState(""),[confirmPassword,setConfirmPassword]=useState(""),[passwordBusy,setPasswordBusy]=useState(false),[inviteRole,setInviteRole]=useState<"admin"|"operator">("operator"),[inviteName,setInviteName]=useState(""),[inviteEmail,setInviteEmail]=useState(""),[inviteBusy,setInviteBusy]=useState(false),[operators,setOperators]=useState<{user_id:string;display_name:string;role:string;active:boolean}[]>([]),[unitOptions,setUnitOptions]=useState<string[]>([]),[user,setUser]=useState<string|null>(null),[loading,setLoading]=useState(true),[email,setEmail]=useState(""),[password,setPassword]=useState(""),[message,setMessage]=useState(""),[profile,setProfile]=useState<{display_name:string;role:string;active:boolean}|null>(null),[rows,setRows]=useState<Appointment[]>([]),[unit,setUnit]=useState("Todas"),[dateFrom,setDateFrom]=useState(""),[dateTo,setDateTo]=useState(""),[tab,setTab]=useState("Dashboard"),[search,setSearch]=useState(""),[busy,setBusy]=useState(false),[mobile,setMobile]=useState(false),[statusFilter,setStatusFilter]=useState("Todos");
  useEffect(()=>{if(!supabase){setLoading(false);return}const client=supabase;client.auth.getUser().then(({data})=>{setUser(data.user?.id??null);setMustChangePassword(data.user?.app_metadata?.must_change_password===true);setLoading(false)});const {data:{subscription}}=client.auth.onAuthStateChange((event,session)=>{setUser(session?.user?.id??null);setMustChangePassword(session?.user?.app_metadata?.must_change_password===true);if(event==="PASSWORD_RECOVERY")setRecoveryMode(true)});return()=>subscription.unsubscribe()},[]);
  const [loadingRecords,setLoadingRecords]=useState(false);
+ const yesterdayBelem=()=>{const parts=new Intl.DateTimeFormat("en-US",{timeZone:"America/Belem",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date());const get=(type:string)=>parts.find(p=>p.type===type)?.value||"";const d=new Date(Date.UTC(Number(get("year")),Number(get("month"))-1,Number(get("day"))));d.setUTCDate(d.getUTCDate()-1);return d.toISOString().slice(0,10)};
  const [appliedFilters,setAppliedFilters]=useState({unit:"Todas",dateFrom:"",dateTo:"",search:""});
+ const effectiveFrom=appliedFilters.dateFrom||(!appliedFilters.dateTo?yesterdayBelem():"");
+ const effectiveTo=appliedFilters.dateTo||(!appliedFilters.dateFrom?yesterdayBelem():"");
  useEffect(()=>{if(!supabase||!user){setProfile(null);setRows([]);setUnitOptions([]);return}const client=supabase;let cancelled=false;
  client.from("clinic_units").select("name").order("name").then(({data,error})=>{if(cancelled)return;if(error)setMessage("Não foi possível carregar as unidades.");else setUnitOptions((data??[]).map(u=>u.name))});
  client.from("operator_profiles").select("display_name,role,active").eq("user_id",user).maybeSingle().then(({data,error})=>{if(cancelled)return;if(error)setMessage("Não foi possível validar as permissões.");setProfile(data)});
@@ -28,8 +31,8 @@ export default function Home(){
    const columns=profile?.role==="admin"?"id,patient_name,patient_phone,specialty,appointment_at,status,unit_id,clinic_units(name),consultation_price,paid_amount":"id,patient_name,patient_phone,specialty,appointment_at,status,unit_id,clinic_units(name)";
    for(let offset=0;;offset+=batchSize){
     let query=client!.from("missed_appointments").select(columns).order("appointment_at",{ascending:false}).range(offset,offset+batchSize-1);
-    if(appliedFilters.dateFrom)query=query.gte("appointment_at",appliedFilters.dateFrom+"T00:00:00");
-    if(appliedFilters.dateTo){const next=new Date(appliedFilters.dateTo+"T00:00:00Z");next.setUTCDate(next.getUTCDate()+1);query=query.lt("appointment_at",next.toISOString().slice(0,10)+"T00:00:00")}
+    if(effectiveFrom)query=query.gte("appointment_at",effectiveFrom+"T00:00:00");
+    if(effectiveTo){const next=new Date(effectiveTo+"T00:00:00Z");next.setUTCDate(next.getUTCDate()+1);query=query.lt("appointment_at",next.toISOString().slice(0,10)+"T00:00:00")}
     const {data,error}=await query;
     if(error)throw error;
     if(cancelled)return;
@@ -41,8 +44,8 @@ export default function Home(){
   finally{if(!cancelled)setLoadingRecords(false)}
  }
  void loadAll();return()=>{cancelled=true}
- },[user,profile?.role,profile?.active,appliedFilters.dateFrom,appliedFilters.dateTo]);
- const filtered=useMemo(()=>rows.filter(r=>{const day=r.appointment_at.slice(0,10);return (appliedFilters.unit==="Todas"||r.clinic_units?.name===appliedFilters.unit)&&(!appliedFilters.dateFrom||day>=appliedFilters.dateFrom)&&(!appliedFilters.dateTo||day<=appliedFilters.dateTo)&&((r.patient_name+" "+r.specialty+" "+(r.clinic_units?.name??"")).toLowerCase().includes(appliedFilters.search.toLowerCase()))}),[rows,appliedFilters]);
+ },[user,profile?.role,profile?.active,effectiveFrom,effectiveTo]);
+ const filtered=useMemo(()=>rows.filter(r=>{const day=r.appointment_at.slice(0,10);return (appliedFilters.unit==="Todas"||r.clinic_units?.name===appliedFilters.unit)&&(!effectiveFrom||day>=effectiveFrom)&&(!effectiveTo||day<=effectiveTo)&&((r.patient_name+" "+r.specialty+" "+(r.clinic_units?.name??"")).toLowerCase().includes(appliedFilters.search.toLowerCase()))}),[rows,appliedFilters,effectiveFrom,effectiveTo]);
  const [page,setPage]=useState(1);
  const visible=useMemo(()=>filtered.filter(r=>(statusFilter==="Todos"||r.status===statusFilter)&&(tab!=="Reagendamentos"||["rescheduled","attended"].includes(r.status))&&(tab!=="Contatos"||["contacted","rescheduled","attended","no_response","opted_out"].includes(r.status))),[filtered,statusFilter,tab]);
  const contacted=filtered.filter(r=>["contacted","rescheduled","attended"].includes(r.status)).length;
