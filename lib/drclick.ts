@@ -17,6 +17,18 @@ export type DrClickAppointment={
 };
 export type DrClickResult={records:DrClickAppointment[];rawShape:string};
 
+/** Clinic IDs observed in the DrClick scheduling system; verify acceptance by the missed-appointments API. */
+export const DRCLICK_CLINICS={
+  "Almirante Barroso":"12706efb-9be9-47d6-a997-7a910c57ef4a",
+  "Augusto Montenegro":"d24730aa-27e0-4666-9b1a-3cc220e2311b",
+  "Cidade Nova 6":"3fe2145e-ec64-442b-a967-864afb4d4393",
+  "Guamá":"f09c72bf-27ab-40b2-a15e-ec1ffed9e579",
+  "Jurunas":"960d2a28-b716-481c-951f-8b9a5bf1feec",
+  "Padre Eutíquio":"bf7f6157-8775-4766-be38-8aa34ec07070"
+} as const;
+export const DRCLICK_CLINIC_IDS=Object.values(DRCLICK_CLINICS) as string[];
+
+
 export function yesterdayBelem(now=new Date()){
   const date=new Intl.DateTimeFormat("en-CA",{timeZone:"America/Belem",year:"numeric",month:"2-digit",day:"2-digit"}).format(now);
   const previous=new Date(date+"T12:00:00Z");previous.setUTCDate(previous.getUTCDate()-1);
