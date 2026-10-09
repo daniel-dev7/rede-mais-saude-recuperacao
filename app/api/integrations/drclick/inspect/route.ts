@@ -17,7 +17,7 @@ export async function POST(request:Request){
  const token=request.headers.get("authorization")?.match(/^Bearer (.+)$/)?.[1];
  if(!url||!key)return NextResponse.json({error:"Configuração incompleta"},{status:503});
  if(!token)return NextResponse.json({error:"Não autorizado"},{status:401});
- const client=createClient(url,key);
+ const client=createClient(url,key,{global:{headers:{Authorization:`Bearer ${token}`}}});
  const {data:{user},error}=await client.auth.getUser(token);
  if(error||!user)return NextResponse.json({error:"Não autorizado"},{status:401});
  const {data:profile}=await client.from("operator_profiles").select("role,active").eq("user_id",user.id).maybeSingle();
