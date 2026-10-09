@@ -58,6 +58,8 @@ export async function POST(req:NextRequest){
  if(input.role!==undefined&&input.role!=="admin"&&input.role!=="operator")return NextResponse.json({error:"Cargo inválido."},{status:400});
  const email=typeof input.email==="string"?input.email.trim().toLowerCase():"";
  const name=typeof input.name==="string"?input.name.trim():"";
+ const password=typeof input.password==="string"?input.password:"";
+ if(password.length<12||password.length>128)return NextResponse.json({error:"A senha provisória deve conter entre 12 e 128 caracteres."},{status:400});
  const {data:allUnits,error:allUnitsError}=await admin.from("clinic_units").select("id");
  if(allUnitsError||!allUnits?.length)return NextResponse.json({error:"Unidades não disponíveis."},{status:503});
  const unitIds=allUnits.map(u=>u.id);
@@ -65,12 +67,12 @@ export async function POST(req:NextRequest){
  return NextResponse.json({error:"Informe nome, e-mail e pelo menos uma unidade válida."},{status:400});
  const {data:units,error:unitsError}=await admin.from("clinic_units").select("id").in("id",unitIds);
  if(unitsError||units?.length!==unitIds.length)return NextResponse.json({error:"Unidades inválidas."},{status:400});
- const {data:invited,error:inviteError}=await admin.auth.admin.inviteUserByEmail(email,{data:{display_name:name}});
- if(inviteError||!invited.user)return NextResponse.json({error:"Não foi possível convidar o usuário. Verifique se o e-mail já existe."},{status:409});
- const newId=invited.user.id;
+ const {data:created,error:createError}=await admin.auth.admin.createUser({email,password,email_confirm:true,user_metadata:{display_name:name},app_metadata:{must_change_password:true}});
+ if(createError||!created.user)return NextResponse.json({error:"Não foi possível criar o usuário. Verifique se o e-mail já existe."},{status:409});
+ const newId=created.user.id;
  const {error:profileError}=await admin.from("operator_profiles").upsert({user_id:newId,display_name:name,role,active:true});
  if(profileError){await admin.auth.admin.deleteUser(newId);return NextResponse.json({error:"Falha ao atribuir perfil."},{status:500})}
  const {error:assignmentError}=await admin.from("operator_units").insert(unitIds.map(unit_id=>({user_id:newId,unit_id})));
  if(assignmentError){await admin.auth.admin.deleteUser(newId);return NextResponse.json({error:"Falha ao atribuir unidades."},{status:500})}
- return NextResponse.json({ok:true,message:"Convite enviado ao novo usuário."},{status:201});
+ return NextResponse.json({ok:true,message:"Usuário criado. A senha provisória deverá ser trocada no primeiro acesso."},{status:201});
 }
