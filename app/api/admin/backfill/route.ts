@@ -1,6 +1,6 @@
 import {NextRequest,NextResponse} from "next/server";
 import {createClient} from "@supabase/supabase-js";
-import {DRCLICK_CLINICS,fetchMissedAppointments} from "../../../../lib/drclick";
+import {DRCLICK_CLINICS,isAllowedMissedService,fetchMissedAppointments} from "../../../../lib/drclick";
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
 export const maxDuration=60;
@@ -28,7 +28,7 @@ export async function POST(req:NextRequest){
   try{
    const {records}=await fetchMissedAppointments(date,clinicId);
    const unique=new Map(records.map(r=>[r.idagendamento,r]));
-   const eligible=[...unique.values()].filter(r=>{const digits=(r.patient_phone||"").replace(/\\D/g,"");return Number(r.amount)>0&&Boolean(r.patient_name?.trim()&&[10,11,12,13].includes(digits.length)&&r.scheduled_date&&!Number.isNaN(Date.parse(r.scheduled_date)))});
+   const eligible=[...unique.values()].filter(r=>{const digits=(r.patient_phone||"").replace(/\\D/g,"");return Number(r.amount)>0&&isAllowedMissedService(r)&&Boolean(r.patient_name?.trim()&&[10,11,12,13].includes(digits.length)&&r.scheduled_date&&!Number.isNaN(Date.parse(r.scheduled_date)))});
    const rows=eligible.map(r=>({external_id:r.idagendamento,drclick_patient_id:/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(r.patient_id||'')?r.patient_id:null,unit_id:unitId,patient_name:r.patient_name!.trim(),patient_phone:r.patient_phone!.replace(/\\D/g,""),specialty:(r.category_name||r.item_name||"Não informada").trim(),appointment_at:r.scheduled_date,consultation_price:Number(r.amount),paid_amount:Number.isFinite(Number(r.amount_paid))?Math.max(0,Number(r.amount_paid)):0,status:"pending"}));
    let inserted=0;for(let i=0;i<rows.length;i+=100){const {data,error}=await admin.from("missed_appointments").upsert(rows.slice(i,i+100),{onConflict:"external_id",ignoreDuplicates:true}).select("id");if(error)throw new Error("Falha ao salvar registros");inserted+=(data||[]).length}
    // Backfill patient IDs on existing appointments without changing their status or contact history.
