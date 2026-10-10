@@ -33,11 +33,15 @@ export async function POST(req:NextRequest){
    let inserted=0;for(let i=0;i<rows.length;i+=100){const {data,error}=await admin.from("missed_appointments").upsert(rows.slice(i,i+100),{onConflict:"external_id",ignoreDuplicates:true}).select("id");if(error)throw new Error("Falha ao salvar registros");inserted+=(data||[]).length}
    // Backfill patient IDs on existing appointments without changing their status or contact history.
    let patientIdsUpdated=0;
-   for(const r of eligible){
-    if(!r.patient_id||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(r.patient_id))continue;
-    const {data:updated,error:updateError}=await admin.from("missed_appointments").update({drclick_patient_id:r.patient_id}).eq("external_id",r.idagendamento).is("drclick_patient_id",null).select("id");
-    if(updateError)throw new Error("Falha ao atualizar identificadores de pacientes");
-    patientIdsUpdated+=(updated||[]).length;
+   const withIds=eligible.filter(r=>r.patient_id&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(r.patient_id));
+   // Bounded concurrency to avoid long serial requests and protect Supabase.
+   for(let i=0;i<withIds.length;i+=20){
+    const batch=await Promise.all(withIds.slice(i,i+20).map(async r=>{
+     const {data,error}=await admin.from("missed_appointments").update({drclick_patient_id:r.patient_id}).eq("external_id",r.idagendamento).is("drclick_patient_id",null).select("id");
+     if(error)throw new Error("Falha ao atualizar identificadores de pacientes");
+     return (data||[]).length;
+    }));
+    patientIdsUpdated+=batch.reduce((sum,n)=>sum+n,0);
    }
    return {unit:name,received:records.length,eligible:eligible.length,excluded:unique.size-eligible.length,inserted,patientIdsUpdated};
   }catch(e){return {unit:name,error:e instanceof Error?e.message:"Falha na importação"}}
