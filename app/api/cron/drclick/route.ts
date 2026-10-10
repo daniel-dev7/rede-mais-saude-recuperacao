@@ -1,6 +1,6 @@
 import {NextResponse} from "next/server";
 import {createClient} from "@supabase/supabase-js";
-import {DRCLICK_CLINICS,fetchMissedAppointments,fetchAttendedAppointments,yesterdayBelem} from "../../../../lib/drclick";
+import {DRCLICK_CLINICS,isAllowedMissedService,fetchMissedAppointments,fetchAttendedAppointments,yesterdayBelem} from "../../../../lib/drclick";
 
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
@@ -29,7 +29,7 @@ export async function GET(request:Request){
    for(const r of records)if(r.idagendamento&&!unique.has(r.idagendamento))unique.set(r.idagendamento,r);
    const eligible=[...unique.values()].filter(r=>{
     const digits=(r.patient_phone||"").replace(/\D/g,"");
-    return Number(r.amount)>0&&Boolean(r.patient_name?.trim()&&[10,11,12,13].includes(digits.length)&&!/^(0+)$/.test(digits)&&r.scheduled_date&&!Number.isNaN(Date.parse(r.scheduled_date)));
+    return Number(r.amount)>0&&isAllowedMissedService(r)&&Boolean(r.patient_name?.trim()&&[10,11,12,13].includes(digits.length)&&!/^(0+)$/.test(digits)&&r.scheduled_date&&!Number.isNaN(Date.parse(r.scheduled_date)));
    });
    const rows=eligible.map(r=>({
     external_id:r.idagendamento,drclick_patient_id:/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(r.patient_id||'')?r.patient_id:null,unit_id:unitId,patient_name:r.patient_name!.trim(),
