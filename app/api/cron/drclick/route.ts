@@ -1,6 +1,6 @@
 import {NextResponse} from "next/server";
 import {createClient} from "@supabase/supabase-js";
-import {DRCLICK_CLINICS,fetchMissedAppointments,yesterdayBelem} from "../../../../lib/drclick";
+import {DRCLICK_CLINICS,fetchMissedAppointments,fetchAttendedAppointments,yesterdayBelem} from "../../../../lib/drclick";
 
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
@@ -51,6 +51,29 @@ export async function GET(request:Request){
    return {unit:name,received:records.length,unique:unique.size,eligible:eligible.length,skipped:unique.size-eligible.length,inserted};
   }catch(e){return {unit:name,error:e instanceof Error?e.message:"Erro desconhecido"}}
  }));
- const failed=results.some(r=>"error" in r);
- return NextResponse.json({date,results,automaticSyncEnabled:true,success:!failed},{status:failed?502:200,headers:{"Cache-Control":"no-store"}});
+ // Reconcile yesterday's attended appointments without human approval.
+ // A patient match alone is insufficient: require a later appointment for the same procedure.
+ const normalized=(s:string)=>s.normalize("NFD").replace(/[\\u0300-\\u036f]/g,"").trim().toLowerCase().replace(/\\s+/g," ");
+ const attendance=await Promise.all(Object.entries(DRCLICK_CLINICS).map(async([name,clinicId])=>{
+  try{
+   const {records}=await fetchAttendedAppointments(date,clinicId);
+   const patientIds=[...new Set(records.map(r=>r.patient_id).filter((id):id is string=>Boolean(id)))];
+   if(!patientIds.length)return {unit:name,attended:records.length,confirmed:0};
+   let confirmed=0;
+   for(let i=0;i<patientIds.length;i+=100){
+    const {data:misses,error}=await admin.from("missed_appointments").select("id,drclick_patient_id,specialty,appointment_at,status").in("drclick_patient_id",patientIds.slice(i,i+100)).neq("status","attended").limit(1000);
+    if(error)throw new Error("Falha ao consultar faltosos para conciliação");
+    for(const miss of misses||[]){
+     const matches=records.filter(r=>r.patient_id===miss.drclick_patient_id&&new Date(r.scheduled_date).getTime()>new Date(miss.appointment_at).getTime()&&normalized(r.category_name||r.item_name||"")===normalized(miss.specialty));
+     if(matches.length!==1)continue;
+     const {data:updated,error:updateError}=await admin.from("missed_appointments").update({status:"attended"}).eq("id",miss.id).eq("status",miss.status).select("id");
+     if(updateError)throw new Error("Falha ao confirmar recuperação");
+     confirmed+=(updated||[]).length;
+    }
+   }
+   return {unit:name,attended:records.length,confirmed};
+  }catch(e){return {unit:name,error:e instanceof Error?e.message:"Falha na validação de atendimentos"}}
+ }));
+ const failed=results.some(r=>"error" in r)||attendance.some(r=>"error" in r);
+ return NextResponse.json({date,results,attendance,automaticSyncEnabled:true,success:!failed},{status:failed?502:200,headers:{"Cache-Control":"no-store"}});
 }
