@@ -88,3 +88,9 @@ export async function fetchAttendedAppointments(date:string,clinicId:string):Pro
  const valid=records.filter((r):r is DrClickAppointment=>Boolean(r)&&typeof r==="object"&&!Array.isArray(r)&&r.status==="atendido"&&typeof r.patient_id==="string"&&typeof r.scheduled_date==="string"&&typeof r.idagendamento==="string"&&Boolean((r.category_name||r.item_name||"").trim()));
  return {records:valid,rawShape:"data.analytic_results_appointments"};
 }
+
+/** Allowed missed-service categories: ultrasound, consultation and tomography. */
+export function isAllowedMissedService(record:Pick<DrClickAppointment,"category_name"|"item_name">):boolean{
+ const description=[record.category_name,record.item_name].filter(Boolean).join(" ").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+ return ["ultrassom","ultra som","ultrassonografia","consulta","tomografia"].some(term=>description.includes(term));
+}
