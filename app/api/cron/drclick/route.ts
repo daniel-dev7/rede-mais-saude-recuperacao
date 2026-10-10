@@ -53,27 +53,38 @@ export async function GET(request:Request){
  }));
  // Reconcile yesterday's attended appointments without human approval.
  // A patient match alone is insufficient: require a later appointment for the same procedure.
- const normalized=(s:string)=>s.normalize("NFD").replace(/[\\u0300-\\u036f]/g,"").trim().toLowerCase().replace(/\\s+/g," ");
- const attendance=await Promise.all(Object.entries(DRCLICK_CLINICS).map(async([name,clinicId])=>{
-  try{
-   const {records}=await fetchAttendedAppointments(date,clinicId);
-   const patientIds=[...new Set(records.map(r=>r.patient_id).filter((id):id is string=>Boolean(id)))];
-   if(!patientIds.length)return {unit:name,attended:records.length,confirmed:0};
-   let confirmed=0;
-   for(let i=0;i<patientIds.length;i+=100){
-    const {data:misses,error}=await admin.from("missed_appointments").select("id,drclick_patient_id,specialty,appointment_at,status").in("drclick_patient_id",patientIds.slice(i,i+100)).neq("status","attended").limit(1000);
-    if(error)throw new Error("Falha ao consultar faltosos para conciliação");
-    for(const miss of misses||[]){
-     const matches=records.filter(r=>r.patient_id===miss.drclick_patient_id&&new Date(r.scheduled_date).getTime()>new Date(miss.appointment_at).getTime()&&normalized(r.category_name||r.item_name||"")===normalized(miss.specialty));
-     if(matches.length!==1)continue;
-     const {data:updated,error:updateError}=await admin.from("missed_appointments").update({status:"attended"}).eq("id",miss.id).eq("status",miss.status).select("id");
-     if(updateError)throw new Error("Falha ao confirmar recuperação");
-     confirmed+=(updated||[]).length;
+ const normalized=(value:string)=>value.normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim().toLowerCase().replace(/\s+/g," ");
+ // Recheck recent attended dates, not only yesterday: a later attendance can occur days after a missed appointment.
+ const dates=Array.from({length:10},(_,i)=>{const d=new Date(date+"T12:00:00Z");d.setUTCDate(d.getUTCDate()-i);return d.toISOString().slice(0,10)}).filter(d=>d>="2026-10-01");
+ const attendance=[];
+ for(const checkDate of dates){
+  const dayResults=await Promise.all(Object.entries(DRCLICK_CLINICS).map(async([name,clinicId])=>{
+   try{
+    const {records}=await fetchAttendedAppointments(checkDate,clinicId);
+    const patientIds=[...new Set(records.map(r=>r.patient_id).filter((id):id is string=>Boolean(id)))];
+    if(!patientIds.length)return {unit:name,date:checkDate,attended:records.length,confirmed:0};
+    let confirmed=0;
+    for(let i=0;i<patientIds.length;i+=100){
+     const {data:misses,error}=await admin.from("missed_appointments").select("id,drclick_patient_id,specialty,appointment_at,status").in("drclick_patient_id",patientIds.slice(i,i+100)).neq("status","attended").limit(1000);
+     if(error)throw new Error("Falha ao consultar faltosos para conciliação");
+     for(const miss of misses||[]){
+      const matches=records.filter(r=>r.patient_id===miss.drclick_patient_id&&new Date(r.scheduled_date).getTime()>new Date(miss.appointment_at).getTime()&&[r.item_name,r.category_name].some(v=>v&&normalized(v)===normalized(miss.specialty)));
+      if(matches.length!==1)continue;
+      const {data:updated,error:updateError}=await admin.from("missed_appointments").update({status:"attended"}).eq("id",miss.id).eq("status",miss.status).select("id");
+      if(updateError)throw new Error("Falha ao confirmar recuperação");
+      confirmed+=(updated||[]).length;
+     }
     }
-   }
-   return {unit:name,attended:records.length,confirmed};
-  }catch(e){return {unit:name,error:e instanceof Error?e.message:"Falha na validação de atendimentos"}}
- }));
+    return {unit:name,date:checkDate,attended:records.length,confirmed};
+   }catch(e){return {unit:name,date:checkDate,error:e instanceof Error?e.message:"Falha na validação de atendimentos"}}
+  }));
+  attendance.push(...dayResults);
+ }
+ const errors=attendance.filter(r=>"error" in r);
+ const confirmedTotal=attendance.reduce((sum,r)=>sum+("confirmed" in r?(r.confirmed||0):0),0);
+ const {error:reconcileAuditError}=await admin.from("audit_events").insert({action:"drclick_attendance_check:"+date+":confirmed="+confirmedTotal+":errors="+errors.length});
+ if(reconcileAuditError)console.error("Falha ao registrar auditoria de conciliação",reconcileAuditError.message);
+ if(errors.length)console.error("DrClick attendance validation failed",JSON.stringify(errors));
  const failed=results.some(r=>"error" in r)||attendance.some(r=>"error" in r);
  return NextResponse.json({date,results,attendance,automaticSyncEnabled:true,success:!failed},{status:failed?502:200,headers:{"Cache-Control":"no-store"}});
 }
