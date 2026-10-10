@@ -32,7 +32,7 @@ export async function GET(request:Request){
     return Number(r.amount)>0&&Boolean(r.patient_name?.trim()&&[10,11,12,13].includes(digits.length)&&!/^(0+)$/.test(digits)&&r.scheduled_date&&!Number.isNaN(Date.parse(r.scheduled_date)));
    });
    const rows=eligible.map(r=>({
-    external_id:r.idagendamento,unit_id:unitId,patient_name:r.patient_name!.trim(),
+    external_id:r.idagendamento,drclick_patient_id:/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(r.patient_id||'')?r.patient_id:null,unit_id:unitId,patient_name:r.patient_name!.trim(),
     patient_phone:r.patient_phone!.replace(/\D/g,""),
     specialty:(r.category_name||r.item_name||"Não informada").trim(),
     appointment_at:r.scheduled_date,
