@@ -65,3 +65,26 @@ export async function fetchMissedAppointments(date:string,clinicId?:string):Prom
   const valid=records.filter((r):r is DrClickAppointment=>Boolean(r)&&typeof r==="object"&&!Array.isArray(r)&&typeof r.idagendamento==="string"&&r.status==="faltou");
   return {records:valid,rawShape:"data.analytic_results_appointments"};
 }
+
+/** Detailed attended appointments only. Aggregated patient IDs are not proof of a matching procedure. */
+export async function fetchAttendedAppointments(date:string,clinicId:string):Promise<DrClickResult>{
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date))throw new Error("Data inválida");
+ const base=process.env.DRCLICK_API_BASE_URL,token=process.env.DRCLICK_API_TOKEN,apiKey=process.env.DRCLICK_API_KEY;
+ if(!base||!/^https:\/\//i.test(base)||(!token&&!apiKey))throw new Error("Credenciais DrClick indisponíveis");
+ const url=new URL("/api/bots/appointmentbystatus",base);
+ for(const [k,v] of Object.entries({idclinica:clinicId,status:"atendido",start_date:date,end_date:date}))url.searchParams.set(k,v);
+ const headers:HeadersInit={Accept:"application/json"};
+ if(token)headers.Authorization="Bearer "+token;
+ if(apiKey)headers["x-api-key"]=apiKey;
+ const res=await fetch(url,{headers,cache:"no-store",signal:AbortSignal.timeout(20000)});
+ if(!res.ok)throw new Error("Consulta de atendidos retornou HTTP "+res.status);
+ const payload:unknown=await res.json();
+ if(!payload||typeof payload!=="object")throw new Error("Resposta inválida");
+ const root=payload as Record<string,unknown>;
+ if(root.success!==true)throw new Error("Consulta de atendidos sem sucesso");
+ const data=root.data as Record<string,unknown>|undefined;
+ const records=data?.analytic_results_appointments;
+ if(!Array.isArray(records))throw new Error("Relatório não oferece atendimentos individuais");
+ const valid=records.filter((r):r is DrClickAppointment=>Boolean(r)&&typeof r==="object"&&!Array.isArray(r)&&r.status==="atendido"&&typeof r.patient_id==="string"&&typeof r.scheduled_date==="string"&&typeof r.idagendamento==="string"&&Boolean((r.category_name||r.item_name||"").trim()));
+ return {records:valid,rawShape:"data.analytic_results_appointments"};
+}
