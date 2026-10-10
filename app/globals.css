@@ -44,3 +44,27 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline-color:#73d
 .insight-panel .login-form label select:hover{border-color:#009ca7;background-color:#fff}
 .insight-panel .login-form label select:focus{outline:none;border-color:#009ca7;background-color:#fff;box-shadow:0 0 0 4px rgba(0,156,167,.13)}
 .insight-panel .login-form label select option{background:#fff;color:#184e56}
+
+
+/* Branded date picker: consistent across browsers */
+.pretty-date{display:flex;align-items:center;gap:10px;position:relative;flex:0 1 auto;padding:5px 8px 5px 13px;border:1px solid #dbe9e5;border-radius:12px;background:#f7fbf9;min-width:195px}
+.pretty-date-label{font-size:12px;font-weight:700;color:#64858b}
+.pretty-date-trigger{display:flex;align-items:center;justify-content:space-between;gap:14px;min-width:145px;height:38px;padding:8px 10px;border:1px solid #dce9e9;border-radius:9px;background:white;color:#22565e;font:600 12px inherit;font-family:inherit;cursor:pointer;transition:.2s}
+.pretty-date-trigger svg{color:#008f99;flex-shrink:0}
+.pretty-date-trigger:hover,.pretty-date-trigger.is-open{border-color:#009ca7;box-shadow:0 0 0 3px rgba(0,156,167,.1)}
+.date-placeholder{color:#829da1}
+.pretty-calendar{position:absolute;z-index:100;top:calc(100% + 9px);left:0;width:294px;padding:16px;border:1px solid #d7e9e9;border-radius:17px;background:#fff;box-shadow:0 18px 48px rgba(19,80,86,.19);animation:calendar-in .15s ease-out}
+.pretty-calendar-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:13px;color:#154e55;text-transform:capitalize}
+.pretty-calendar-top strong{font-size:14px}
+.pretty-calendar-top button{border:0;background:#eef8f8;color:#007b86;border-radius:9px;width:32px;height:32px;font-size:23px;cursor:pointer}
+.pretty-calendar-top button:hover{background:#d6f2f1}
+.pretty-calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;text-align:center}
+.pretty-weekday{padding:7px 0;font-size:11px;font-weight:700;color:#8ba6a9}
+.pretty-calendar-grid button{border:0;border-radius:9px;background:transparent;color:#265960;min-height:33px;font-size:12px;cursor:pointer}
+.pretty-calendar-grid button:hover:not(:disabled){background:#e3f7f6;color:#006d78}
+.pretty-calendar-grid button.selected{background:#009ca7;color:#fff;font-weight:800}
+.pretty-calendar-grid button:disabled{opacity:.25;cursor:not-allowed}
+.pretty-calendar-footer{display:flex;justify-content:space-between;border-top:1px solid #edf3f3;margin-top:12px;padding-top:12px}
+.pretty-calendar-footer button{border:0;background:transparent;color:#008b95;font-size:12px;font-weight:700;cursor:pointer;padding:6px}
+@keyframes calendar-in{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:720px){.pretty-date{flex:1 1 180px}.pretty-date-trigger{flex:1;min-width:0}.pretty-calendar{max-width:min(294px,calc(100vw - 36px))}}
