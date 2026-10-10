@@ -31,7 +31,15 @@ export async function POST(req:NextRequest){
    const eligible=[...unique.values()].filter(r=>{const digits=(r.patient_phone||"").replace(/\\D/g,"");return Number(r.amount)>0&&Boolean(r.patient_name?.trim()&&[10,11,12,13].includes(digits.length)&&r.scheduled_date&&!Number.isNaN(Date.parse(r.scheduled_date)))});
    const rows=eligible.map(r=>({external_id:r.idagendamento,drclick_patient_id:/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(r.patient_id||'')?r.patient_id:null,unit_id:unitId,patient_name:r.patient_name!.trim(),patient_phone:r.patient_phone!.replace(/\\D/g,""),specialty:(r.category_name||r.item_name||"Não informada").trim(),appointment_at:r.scheduled_date,consultation_price:Number(r.amount),paid_amount:Number.isFinite(Number(r.amount_paid))?Math.max(0,Number(r.amount_paid)):0,status:"pending"}));
    let inserted=0;for(let i=0;i<rows.length;i+=100){const {data,error}=await admin.from("missed_appointments").upsert(rows.slice(i,i+100),{onConflict:"external_id",ignoreDuplicates:true}).select("id");if(error)throw new Error("Falha ao salvar registros");inserted+=(data||[]).length}
-   return {unit:name,received:records.length,eligible:eligible.length,excluded:unique.size-eligible.length,inserted};
+   // Backfill patient IDs on existing appointments without changing their status or contact history.
+   let patientIdsUpdated=0;
+   for(const r of eligible){
+    if(!r.patient_id||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(r.patient_id))continue;
+    const {data:updated,error:updateError}=await admin.from("missed_appointments").update({drclick_patient_id:r.patient_id}).eq("external_id",r.idagendamento).is("drclick_patient_id",null).select("id");
+    if(updateError)throw new Error("Falha ao atualizar identificadores de pacientes");
+    patientIdsUpdated+=(updated||[]).length;
+   }
+   return {unit:name,received:records.length,eligible:eligible.length,excluded:unique.size-eligible.length,inserted,patientIdsUpdated};
   }catch(e){return {unit:name,error:e instanceof Error?e.message:"Falha na importação"}}
  }));
  return NextResponse.json({date,results,success:results.every(r=>!("error" in r))},{status:results.some(r=>"error" in r)?502:200});
