@@ -19,7 +19,7 @@ export async function POST(req:NextRequest){
  let body:unknown;try{body=await req.json()}catch{return NextResponse.json({error:"JSON inválido."},{status:400})}
  const date=body&&typeof body==="object"&&"date" in body?(body as {date:unknown}).date:null;
  const today=new Intl.DateTimeFormat("en-CA",{timeZone:"America/Belem",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
- if(typeof date!=="string"||!/^2026-10-(0[1-9]|[12][0-9]|3[01])$/.test(date)||date>=today)return NextResponse.json({error:"Data fora do período permitido."},{status:400});
+ if(typeof date!=="string"||!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(Date.parse(date+"T00:00:00Z"))||date<"2026-10-01"||date>=today)return NextResponse.json({error:"Data fora do período permitido."},{status:400});
  const {data:units,error:unitError}=await admin.from("clinic_units").select("id,name");
  if(unitError||!units)return NextResponse.json({error:"Unidades indisponíveis."},{status:503});
  const unitIds=new Map(units.map(u=>[u.name,u.id]));
