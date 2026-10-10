@@ -68,3 +68,9 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline-color:#73d
 .pretty-calendar-footer button{border:0;background:transparent;color:#008b95;font-size:12px;font-weight:700;cursor:pointer;padding:6px}
 @keyframes calendar-in{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:translateY(0)}}
 @media(max-width:720px){.pretty-date{flex:1 1 180px}.pretty-date-trigger{flex:1;min-width:0}.pretty-calendar{max-width:min(294px,calc(100vw - 36px))}}
+
+/* Patient follow-up status, separate from contact action */
+.attendance-pill{display:inline-flex;align-items:center;white-space:nowrap;padding:7px 11px;border-radius:999px;font-size:11px;font-weight:750;letter-spacing:.01em}
+.attendance-pill.confirmed{background:#d9f6e8;color:#086343}
+.attendance-pill.rescheduled{background:#e2f0ff;color:#1758a3}
+.attendance-pill.waiting{background:#f1f5f7;color:#647783}
